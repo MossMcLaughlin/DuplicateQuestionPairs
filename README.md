@@ -12,3 +12,5 @@ Notes: Remeber not to overfit.
        Keep at it. Slow & steady.
        Keep in mind NOAA challenge and how to adapt the model.
           Due date: May 30th
+
+   Requirments: Glove word embeddings. train and test csv files provided by Kaggle.
