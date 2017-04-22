@@ -1,12 +1,13 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 import tensorflow as tf
 import numpy as np
 import os
 import time
 import datetime
-import data_helpers
-from text_cnn import TextCNN
+#import data_helpers
+import utils
+from CNN import CNN
 from tensorflow.contrib import learn
 
 # Parameters
@@ -14,11 +15,16 @@ from tensorflow.contrib import learn
 
 # Data loading params
 tf.flags.DEFINE_float("dev_sample_percentage", .1, "Percentage of the training data to use for validation")
-tf.flags.DEFINE_string("positive_data_file", "./data/rt-polaritydata/rt-polarity.pos", "Data source for the positive data.")
-tf.flags.DEFINE_string("negative_data_file", "./data/rt-polaritydata/rt-polarity.neg", "Data source for the negative data.")
+#tf.flags.DEFINE_string("positive_data_file", "./data/rt-polaritydata/rt-polarity.pos", "Data source for the positive data.")
+#tf.flags.DEFINE_string("negative_data_file", "./data/rt-polaritydata/rt-polarity.neg", "Data source for the negative data.")
+tf.flags.DEFINE_string("train_data", "data/train.csv", "Data source for training data.")
+tf.flags.DEFINE_string("test_data", "data/test.csv", "Data source for the test data.")
+
+
 
 # Model Hyperparameters
-tf.flags.DEFINE_integer("embedding_dim", 128, "Dimensionality of character embedding (default: 128)")
+tf.flags.DEFINE_integer("embedding_dim", 50, "Dimensionality of character embedding")
+tf.flags.DEFINE_integer("vocabulary_size",12000,"Vocabulary size model will know")
 tf.flags.DEFINE_string("filter_sizes", "3,4,5", "Comma-separated filter sizes (default: '3,4,5')")
 tf.flags.DEFINE_integer("num_filters", 128, "Number of filters per filter size (default: 128)")
 tf.flags.DEFINE_float("dropout_keep_prob", 0.5, "Dropout keep probability (default: 0.5)")
@@ -44,7 +50,7 @@ print("")
 
 # Data Preparation
 # ==================================================
-
+'''
 # Load data
 print("Loading data...")
 x_text, y = data_helpers.load_data_and_labels(FLAGS.positive_data_file, FLAGS.negative_data_file)
@@ -67,6 +73,26 @@ x_train1, x_dev1 = x_shuffled[:dev_sample_index], x_shuffled[dev_sample_index:]
 y_train, y_dev = y_shuffled[:dev_sample_index], y_shuffled[dev_sample_index:]
 print("Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
 print("Train/Dev split: {:d}/{:d}".format(len(y_train), len(y_dev)))
+'''
+
+vocabulary_size = 12000
+
+x,y,word_to_index,index_to_word,E = utils.load_data(FLAGS.train_data,FLAGS.vocabulary_size)
+#x2,y2,word_to_index,index_to_word,E2 = utils.load_test_data(FLAGS.test_data,FLAGS.vocabulary_size)
+
+np.random.seed(42)
+shuffle_indices = np.random.permutation(np.arange(len(y)))
+print(len(y),len(x[0]),len(x[1]))
+x_train = [None,None]
+for j,channel in enumerate(x):
+    print('channel number',j)
+    x_train[j] = [q[shuffle_indices[i]] for i,q in enumerate(channel)]
+y_train = [y[shuffle_indices[i]] for i in range(len(y))]
+
+#np.random.seed(42)
+#shuffle_indices2 = np.random.permutation(np.arange(len(y2)))
+#x_test = x2[shuffle_indices2]
+#y_test = y2[shuffle_indices2]
 
 
 # Training
@@ -78,7 +104,7 @@ with tf.Graph().as_default():
       log_device_placement=FLAGS.log_device_placement)
     sess = tf.Session(config=session_conf)
     with sess.as_default():
-        cnn = TextCNN(
+        cnn = CNN(
             sequence_length=x_train.shape[1],
             num_classes=y_train.shape[1],
             vocab_size=len(vocab_processor.vocabulary_),
@@ -172,6 +198,7 @@ with tf.Graph().as_default():
         batches = data_helpers.batch_iter(
             list(zip(x_train, y_train)), FLAGS.batch_size, FLAGS.num_epochs)
         # Training loop. For each batch...
+
         for batch in batches:
             x_batch, y_batch = zip(*batch)
             train_step(x_batch, y_batch)

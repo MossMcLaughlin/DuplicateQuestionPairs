@@ -10,6 +10,7 @@ import io
 import array
 from datetime import datetime
 
+import matplotlib.pyplot as plt
 import numpy as np
 import nltk
 
@@ -26,8 +27,8 @@ replace_similar_words = False
 
 embedding_dim = 50
 embedding_file = 'glove.6B/glove.6B.%sd.txt' % embedding_dim
-data_file = 'data/train.csv'
-
+train_file = 'data/train.csv'
+test_file = 'data/test.csv'
 
 def load_embeddings():
   print("Loading word embeddings...")
@@ -50,7 +51,7 @@ def create_embedding(embedding_dict,vocab_size,itw):
     print("Building word embedding matrix...")
     E = [None] * (vocab_size+3)
     for i in range(3): E[i] = np.zeros(embedding_dim) 
-    for i in range(vocab_size-3): E[i+3] = embedding_dict[itw[i+3]]
+    for i in range(vocab_size): E[i+3] = embedding_dict[itw[i+3]]
     return E
         
 
@@ -73,7 +74,7 @@ def find_similar_words(word,word_list,embeddings,similarity_threshold):
 
 
 
-def load_data(filename, vocabulary_size=2000):
+def load_data(filename,vocabulary_size=12000):
     word_to_index = []
     index_to_word = []
     print("Reading text file...")
@@ -84,22 +85,23 @@ def load_data(filename, vocabulary_size=2000):
         #print('\n')
         #print(txt[-1])
         #print('\n')
-        tokenized_sentences1 = [line[3] for line in dat]
-        tokenized_sentences2 = [line[4] for line in dat]
-        is_duplicate = [line[5] for line in dat]
-        #tokenized_sentences1.pop(0)
-        #tokenized_sentences2.pop(0)
-        
+        tokenized_sentences1,tokenized_sentences2,is_duplicate = ([],[],[])
+        for line in dat:
+            tokenized_sentences1.append(line[3])
+            tokenized_sentences2.append(line[4])
+            is_duplicate.append(line[5])
+
     print("Parsed %d Questions.\n" % (len(tokenized_sentences1)*2))
     print("Tokenizing sentences...")
     tokenized_sentences1 = [nltk.word_tokenize(line) for line in tokenized_sentences1]
     tokenized_sentences2 = [nltk.word_tokenize(line) for line in tokenized_sentences2]
     print("Done.\n")
 
-    print(tokenized_sentences1[0],tokenized_sentences1[-1])
+    print(tokenized_sentences1[1:7],tokenized_sentences1[-1])
     #tokenized_sentences1.pop(0)
     #tokenized_sentences2.pop(0)
     tokenized_sentences = [tokenized_sentences1,tokenized_sentences2] 
+    print(len(tokenized_sentences[0]),len(tokenized_sentences[1]))
     txt = tokenized_sentences1
     for line in tokenized_sentences2: txt.append(line) 
     
@@ -136,10 +138,10 @@ def load_data(filename, vocabulary_size=2000):
     word_to_index = dict([(w, i) for i, w in enumerate(index_to_word)])
 
     E = create_embedding(embeddings,len(inside_words),index_to_word)
-    
+    print(E[-1])    
     print("Using vocabulary size %d." % vocabulary_size)
     print("The least frequent word in our vocablary is '%s' and appeared %d times in this dataset.\n"           % (inside_words[1][0], inside_words[1][1]))
-    
+    print(index_to_word[-1])
     # Find similar words that are in the data set but outside of our vocabulary
     if replace_similar_words:
         print("Searching for similar words...")
@@ -162,16 +164,53 @@ def load_data(filename, vocabulary_size=2000):
 
     # Replace unknown words with unkown token (FOR NOW) 
     #  IN PROGRESS
-    tokenized_sentences = [[[[w if w in word_to_index else UNKNOWN_TOKEN] for w in question] for question in channel] for channel in tokenized_sentences]
+    tokenized_sentences = [[[w if w in word_to_index else UNKNOWN_TOKEN for w in question] for question in channel] for channel in tokenized_sentences]
 
-    print('Filtered training data:')
-    print(tokenized_sentences1[1:5])
-    print('\n')
+    # Find max sentence length.
+    q_len = []
+    for channel in tokenized_sentences:
+        for q in channel:
+            q_len.append(len(q))
+    #q_len = np.array([[len(q) for q in channel] for channel in tokenized_sentences])
+    print("Max question length: ",q_len[np.array(q_len).argmax()])
+    print("Mean question length: ",np.mean([q_len]))
+    bins = np.linspace(0,100,33)
+    plt.hist(q_len,bins)
+    plt.show()
+
+    #print('Filtered training data:')
+    #print(tokenized_sentences1[1:5])
+    #print('\n')
+
+    #print(tokenized_sentences[0][1][2:5],type(tokenized_sentences[0][1][2]))
 
     # Build training data
+    print(len(tokenized_sentences[0]),len(tokenized_sentences[1]))
     X_train = np.asarray([[[word_to_index[w] for w in question[1:]] for question in channel] for channel in tokenized_sentences])  
-    y_train = np.asarray(is_duplicate[1:])
+    y_train = np.asarray([[1,0] if j == 1 else [0,1] for j in is_duplicate[1:]])
     print(y_train[:10])
-    return X_train,y_train,word_to_index,index_to_word
+    return X_train,y_train,word_to_index,index_to_word,E
 
-load_data(data_file)
+
+def load_test_data(test_data,vocabulary_size):
+
+    print("Reading validation file...")
+
+    with open(test_data) as f:
+        dat = csv.reader(f,delimiter=',',quotechar='"')
+        tokenized_sentences1,tokenized_sentences2 = ([],[])
+        for line in dat:
+            tokenized_sentences1.append(line[3])
+            tokenized_sentences2.append(line[4])
+
+    print("Parsed %d Questions.\n" % (len(tokenized_sentences1)*2))
+    print("Tokenizing sentences...")
+    tokenized_sentences1 = [nltk.word_tokenize(line) for line in tokenized_sentences1]
+    tokenized_sentences2 = [nltk.word_tokenize(line) for line in tokenized_sentences2]
+    print("Done.\n")
+  
+    tokenized_sentences = [[[w if w in word_to_index else UNKNOWN_TOKEN for w in question] for question in channel] for channel in tokenized_sentences]
+
+    X_test = np.asarray([[[word_to_index[w] for w in question[1:]] for question in channel] for channel in tokenized_sentences])
+
+    return X_test
