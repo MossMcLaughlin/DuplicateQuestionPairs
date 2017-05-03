@@ -1,5 +1,7 @@
 #! /usr/bin/env python3
 
+print("Importing Libraries")
+
 import tensorflow as tf
 import numpy as np
 import os
@@ -31,10 +33,10 @@ tf.flags.DEFINE_float("dropout_keep_prob", 0.5, "Dropout keep probability (defau
 tf.flags.DEFINE_float("l2_reg_lambda", 0.0, "L2 regularization lambda (default: 0.0)")
 
 # Training parameters
-tf.flags.DEFINE_integer("batch_size", 64, "Batch Size (default: 64)")
-tf.flags.DEFINE_integer("num_epochs", 200, "Number of training epochs (default: 200)")
-tf.flags.DEFINE_integer("evaluate_every", 100, "Evaluate model on dev set after this many steps (default: 100)")
-tf.flags.DEFINE_integer("checkpoint_every", 100, "Save model after this many steps (default: 100)")
+tf.flags.DEFINE_integer("batch_size", 20, "Batch Size (default: 64)")
+tf.flags.DEFINE_integer("num_epochs", 20, "Number of training epochs (default: 200)")
+tf.flags.DEFINE_integer("evaluate_every", 1, "Evaluate model on dev set after this many steps (default: 100)")
+tf.flags.DEFINE_integer("checkpoint_every", 10000, "Save model after this many steps (default: 100)")
 tf.flags.DEFINE_integer("num_checkpoints", 5, "Number of checkpoints to store (default: 5)")
 # Misc Parameters
 tf.flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
@@ -77,22 +79,24 @@ print("Train/Dev split: {:d}/{:d}".format(len(y_train), len(y_dev)))
 
 vocabulary_size = 12000
 
-x,y,word_to_index,index_to_word,E = utils.load_data(FLAGS.train_data,FLAGS.vocabulary_size)
-#x2,y2,word_to_index,index_to_word,E2 = utils.load_test_data(FLAGS.test_data,FLAGS.vocabulary_size)
+x_train,y_train,word_to_index,index_to_word,E = utils.load_data(FLAGS.train_data,FLAGS.vocabulary_size)
+#x2,y2,word_to_index,E = utils.load_test_data(FLAGS.test_data,FLAGS.vocabulary_size)
 
+print("Shuffling Data...")
 np.random.seed(42)
-shuffle_indices = np.random.permutation(np.arange(len(y)))
-print(len(y),len(x[0]),len(x[1]))
-x_train = [None,None]
-for j,channel in enumerate(x):
-    print('channel number',j)
-    x_train[j] = [q[shuffle_indices[i]] for i,q in enumerate(channel)]
-y_train = [y[shuffle_indices[i]] for i in range(len(y))]
+shuffle_indices = np.random.permutation(np.arange(len(y_train)))
+print(len(y_train),len(x_train),len(x_train[1]))
+x_dev= (x_train[:100])
+y_dev= (y_train[:100])
+print("test")
+x_train = ([x_train[shuffle_indices[i]] for i in range(len(shuffle_indices))])
+y_train = ([y_train[shuffle_indices[i]] for i in range(len(y_train))])
+print("Done.\n")
 
 #np.random.seed(42)
 #shuffle_indices2 = np.random.permutation(np.arange(len(y2)))
-#x_test = x2[shuffle_indices2]
-#y_test = y2[shuffle_indices2]
+#x_dev = x2[shuffle_indices2]
+#y_dev = y2[shuffle_indices2]
 
 
 # Training
@@ -104,15 +108,16 @@ with tf.Graph().as_default():
       log_device_placement=FLAGS.log_device_placement)
     sess = tf.Session(config=session_conf)
     with sess.as_default():
+        print("Building model...")
         cnn = CNN(
-            sequence_length=x_train.shape[1],
-            num_classes=y_train.shape[1],
-            vocab_size=len(vocab_processor.vocabulary_),
+            sequence_length=len(x_train[1]),
+            num_classes=len(y_train[1]),
+            vocab_size=FLAGS.vocabulary_size,
             embedding_size=FLAGS.embedding_dim,
             filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
             num_filters=FLAGS.num_filters,
             l2_reg_lambda=FLAGS.l2_reg_lambda)
-
+        print("Done.\n")
         # Define Training procedure
         global_step = tf.Variable(0, name="global_step", trainable=False)
         optimizer = tf.train.AdamOptimizer(1e-3)
@@ -154,14 +159,13 @@ with tf.Graph().as_default():
         if not os.path.exists(checkpoint_dir):
             os.makedirs(checkpoint_dir)
         saver = tf.train.Saver(tf.global_variables(), max_to_keep=FLAGS.num_checkpoints)
-
         # Write vocabulary
-        vocab_processor.save(os.path.join(out_dir, "vocab"))
 
         # Initialize all variables
         sess.run(tf.global_variables_initializer())
 
         def train_step(x_batch, y_batch):
+            print('starting train step')
             """
             A single training step
             """
@@ -170,6 +174,7 @@ with tf.Graph().as_default():
               cnn.input_y: y_batch,
               cnn.dropout_keep_prob: FLAGS.dropout_keep_prob
             }
+            print('made feed dict')
             _, step, summaries, loss, accuracy = sess.run(
                 [train_op, global_step, train_summary_op, cnn.loss, cnn.accuracy],
                 feed_dict)
@@ -186,26 +191,32 @@ with tf.Graph().as_default():
               cnn.input_y: y_batch,
               cnn.dropout_keep_prob: 1.0
             }
-            step, summaries, loss, accuracy = sess.run(
-                [global_step, dev_summary_op, cnn.loss, cnn.accuracy],
+            step, summaries, loss,predictions, accuracy = sess.run(
+                [global_step, dev_summary_op, cnn.loss, cnn.predictions, cnn.accuracy],
                 feed_dict)
             time_str = datetime.datetime.now().isoformat()
             print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
+            #print(predictions)
+            #print(y_dev) 
             if writer:
                 writer.add_summary(summaries, step)
 
         # Generate batches
-        batches = data_helpers.batch_iter(
-            list(zip(x_train, y_train)), FLAGS.batch_size, FLAGS.num_epochs)
+        print('Batching...')
+        batches = utils.create_batches(list(zip(x_train, y_train)), FLAGS.batch_size,FLAGS.num_epochs)
+        print("Done.\n")
         # Training loop. For each batch...
 
         for batch in batches:
             x_batch, y_batch = zip(*batch)
+            print('zipped')
             train_step(x_batch, y_batch)
+            print('train_stepped')
             current_step = tf.train.global_step(sess, global_step)
+            print('current_stepped')
             if current_step % FLAGS.evaluate_every == 0:
                 print("\nEvaluation:")
-                dev_step(x_dev, y_dev, writer=dev_summary_writer)
+                dev_step(x_dev, y_dev, writer=None)
                 print("")
             if current_step % FLAGS.checkpoint_every == 0:
                 path = saver.save(sess, checkpoint_prefix, global_step=current_step)
