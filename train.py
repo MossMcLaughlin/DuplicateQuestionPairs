@@ -33,9 +33,9 @@ tf.flags.DEFINE_float("dropout_keep_prob", 0.5, "Dropout keep probability (defau
 tf.flags.DEFINE_float("l2_reg_lambda", 0.0, "L2 regularization lambda (default: 0.0)")
 
 # Training parameters
-tf.flags.DEFINE_integer("batch_size", 20, "Batch Size (default: 64)")
-tf.flags.DEFINE_integer("num_epochs", 20, "Number of training epochs (default: 200)")
-tf.flags.DEFINE_integer("evaluate_every", 1, "Evaluate model on dev set after this many steps (default: 100)")
+tf.flags.DEFINE_integer("batch_size", 64, "Batch Size (default: 64)")
+tf.flags.DEFINE_integer("num_epochs", 100, "Number of training epochs (default: 200)")
+tf.flags.DEFINE_integer("evaluate_every", 100, "Evaluate model on dev set after this many steps (default: 100)")
 tf.flags.DEFINE_integer("checkpoint_every", 10000, "Save model after this many steps (default: 100)")
 tf.flags.DEFINE_integer("num_checkpoints", 5, "Number of checkpoints to store (default: 5)")
 # Misc Parameters
@@ -82,16 +82,16 @@ vocabulary_size = 12000
 x_train,y_train,word_to_index,index_to_word,E = utils.load_data(FLAGS.train_data,FLAGS.vocabulary_size)
 #x2,y2,word_to_index,E = utils.load_test_data(FLAGS.test_data,FLAGS.vocabulary_size)
 
-print("Shuffling Data...")
-np.random.seed(42)
-shuffle_indices = np.random.permutation(np.arange(len(y_train)))
+#print("Shuffling Data...")
+#np.random.seed(42)
+#shuffle_indices = np.random.permutation(np.arange(len(y_train)))
 print(len(y_train),len(x_train),len(x_train[1]))
 x_dev= (x_train[:100])
 y_dev= (y_train[:100])
-print("test")
-x_train = ([x_train[shuffle_indices[i]] for i in range(len(shuffle_indices))])
-y_train = ([y_train[shuffle_indices[i]] for i in range(len(y_train))])
-print("Done.\n")
+#print("test")
+#x_train = ([x_train[shuffle_indices[i]] for i in range(len(shuffle_indices))])
+#y_train = ([y_train[shuffle_indices[i]] for i in range(len(y_train))])
+#print("Done.\n")
 
 #np.random.seed(42)
 #shuffle_indices2 = np.random.permutation(np.arange(len(y2)))
@@ -174,7 +174,6 @@ with tf.Graph().as_default():
               cnn.input_y: y_batch,
               cnn.dropout_keep_prob: FLAGS.dropout_keep_prob
             }
-            print('made feed dict')
             _, step, summaries, loss, accuracy = sess.run(
                 [train_op, global_step, train_summary_op, cnn.loss, cnn.accuracy],
                 feed_dict)
@@ -203,21 +202,22 @@ with tf.Graph().as_default():
 
         # Generate batches
         print('Batching...')
-        batches = utils.create_batches(list(zip(x_train, y_train)), FLAGS.batch_size,FLAGS.num_epochs)
+        batches = utils.create_batches(list(zip(x_train[0],x_train[1],y_train)), FLAGS.batch_size,E)
         print("Done.\n")
         # Training loop. For each batch...
 
-        for batch in batches:
-            x_batch, y_batch = zip(*batch)
-            print('zipped')
-            train_step(x_batch, y_batch)
-            print('train_stepped')
-            current_step = tf.train.global_step(sess, global_step)
-            print('current_stepped')
-            if current_step % FLAGS.evaluate_every == 0:
-                print("\nEvaluation:")
-                dev_step(x_dev, y_dev, writer=None)
-                print("")
-            if current_step % FLAGS.checkpoint_every == 0:
-                path = saver.save(sess, checkpoint_prefix, global_step=current_step)
-                print("Saved model checkpoint to {}\n".format(path))
+        for j in range(FLAGS.num_epochs):
+            for batch in batches:
+                x_batch, y_batch = zip(*batch)
+                print('zipped')
+                train_step(x_batch, y_batch)
+                print('train_stepped')
+                current_step = tf.train.global_step(sess, global_step)
+                print('current_stepped')
+                if current_step % FLAGS.evaluate_every == 0:
+                    print("\nEvaluation:")
+                    dev_step(x_dev, y_dev, writer=None)
+                    print("")
+                if current_step % FLAGS.checkpoint_every == 0:
+                    path = saver.save(sess, checkpoint_prefix, global_step=current_step)
+                    print("Saved model checkpoint to {}\n".format(path))

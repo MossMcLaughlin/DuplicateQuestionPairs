@@ -31,6 +31,9 @@ embedding_file = 'glove.6B/glove.6B.%sd.txt' % embedding_dim
 #train_file = 'data/train.csv'
 #test_file = 'data/test.csv'
 
+
+
+
 def load_embeddings():
   print("Loading word embeddings...")
   with open(embedding_file) as f:
@@ -39,11 +42,8 @@ def load_embeddings():
     v = [x[1:] for x in w]
     w = [x[0] for x in w]
     print("Word embedding vocab size: ",len(v),'\n')
-    
-
     for i in range(len(w)):
       words[w[i]] = v[i]
-
     return(words)
 
 
@@ -55,7 +55,18 @@ def create_embedding(embedding_dict,vocab_size,itw):
     for i in range(vocab_size): E[i+3] = embedding_dict[itw[i+3]]
     return E
         
-
+def embedded_batch(batch,E):
+    batch = [list(tup) for tup in batch]
+    for i,q in enumerate(batch[0]):
+        batch[0][i] = [E[w] for w in q]
+    for i,q in enumerate(batch[1]):
+        batch[1][i] = [E[w] for w in q]
+    x_train = batch[0]
+    for i,q in enumerate(batch[1]):
+        for j,w in enumerate(q):
+            for k,e in enumerate(w):
+                x_train[i][j][k] = [x_train[i][j][k],e]
+    yield x_train 
 
 
 def cos_similarity(x,y):
@@ -63,7 +74,6 @@ def cos_similarity(x,y):
     y = np.array(y).astype(np.float)
     d = np.dot(x,y) / (np.sqrt(np.dot(x,x))*(np.sqrt(np.dot(y,y))))
     return d
-
 
 
 def find_similar_words(word,word_list,embeddings,similarity_threshold):
@@ -74,18 +84,12 @@ def find_similar_words(word,word_list,embeddings,similarity_threshold):
     
 
 
-
 def load_data(filename,vocabulary_size=12000):
     word_to_index = []
     index_to_word = []
     print("Reading CSV file...")
     with open(filename) as f:
         dat = csv.reader(f,delimiter=',',quotechar='"')
-        #print('Raw training data:')
-        #print(txt[0]) 
-        #print('\n')
-        #print(txt[-1])
-        #print('\n')
         tokenized_sentences1,tokenized_sentences2,is_duplicate = ([],[],[])
         for line in dat:
             tokenized_sentences1.append(line[3])
@@ -112,6 +116,7 @@ def load_data(filename,vocabulary_size=12000):
     n_data_words = len(word_freq.items())
     print("Found %d unique words tokens.\n" % n_data_words)
     
+    
     embeddings = load_embeddings()
     vocab = sorted(word_freq.items(), key=lambda x: (x[1], x[0]), reverse=True)
     
@@ -123,17 +128,17 @@ def load_data(filename,vocabulary_size=12000):
     
     # We take the [vocabulary_size] most frequent words and build our word embedding matrix (or lookup table for now).  
     # Words in dataset are now either inside or outside embedding matrix.
-    inside_words = sorted(vocab[:vocabulary_size], key=operator.itemgetter(1))
+    inside_words = sorted(vocab, key=operator.itemgetter(1))
     #outside_words = sorted(vocab[vocabulary_size:], key=operator.itemgetter(1))
     
     index_to_word = ["<PAD>", UNKNOWN_TOKEN,SENTENCE_END_TOKEN] + [x[0] for x in inside_words]
     word_to_index = dict([(w, i) for i, w in enumerate(index_to_word)])
 
     E = create_embedding(embeddings,len(inside_words),index_to_word)
-    print("Using vocabulary size %d." % vocabulary_size)
-    print("The least frequent word in our vocablary is '%s' and appeared %d times in this dataset.\n"           % (inside_words[1][0], inside_words[1][1]))
+    print("Using vocabulary size %d." % len(E))
+    print("The least frequent word in our vocablary is '%s' and appeared %d times in this dataset.\n" % (inside_words[1][0], inside_words[1][1]))
     print("The most most frequent words in our dataset: ",index_to_word[-10:])
-
+    '''
     # Find similar words that are in the data set but outside of our vocabulary
     if replace_similar_words:
         print("Searching for similar words...")
@@ -152,11 +157,14 @@ def load_data(filename,vocabulary_size=12000):
     # Save vocab in a file with one words in each line, from most to least frequent 
     #         (if same vocab is to be used for training and later evaluation)
 
-   
+    '''
 
     # Replace unknown words with unkown token (FOR NOW) 
     #  IN PROGRESS
+    print("Replacing unknown words...")
     tokenized_sentences = [[[w if w in word_to_index else UNKNOWN_TOKEN for w in question] for question in channel] for channel in tokenized_sentences]
+    print(tokenized_sentences[0][0:2])
+    print("Done.\n")
     # Find max sentence length.
     q_len = []
     for channel in tokenized_sentences:
@@ -169,6 +177,7 @@ def load_data(filename,vocabulary_size=12000):
 
     ### VIEW DATA ###
     '''
+    import matplotlib.pyplot as plt
     # View histogram of question length to determine how to pad 
     bins = np.linspace(0,200,50)
     plt.hist(q_len,bins)
@@ -217,15 +226,11 @@ def load_data(filename,vocabulary_size=12000):
 
     # Build training data
     print(np.array(tokenized_sentences).shape)
-    # Our input data is now shape (2,num of question pairs,padding length).
-    # We want to arrange this to be (num of question pairs,padding length,2)
-#    X_data = tokenized_sentences[0]
-#    for i,question in enumerate(tokenized_sentences[1]):
-#        for j,word in enumerate(question)
-#        X_data[i][j] = [X_data[i][j],w]
 
-    print("Embedding data...")
+    # Our input data is currently shape (2,num of question pairs,padding length).
+    # We want to arrange this to be (num of question pairs,padding length,embedding dimension,2)
 
+    '''
     for i,q in enumerate(tokenized_sentences[0]):
         tokenized_sentences[0][i] = [E[word_to_index[w]] for w in q]
 
@@ -235,38 +240,20 @@ def load_data(filename,vocabulary_size=12000):
     #tokenized_sentences = np.asarray([[[E[word_to_index[w]] for w in question] for question in channel] for channel in tokenized_sentences])
     print(np.array(tokenized_sentences).shape)
     x_train = tokenized_sentences[0]
-
+    
     print("Reshaping data...")
     for i,q in enumerate(tokenized_sentences[1]):
         for j,w in enumerate(q):
             for k,e in enumerate(w):
                 x_train[i][j][k] = [x_train[i][j][k],e]
-    '''
-    print("Batching data...")
-    for i,q in enumerate(x_train):
-        print(i)
-    num_batches    
-    x_train = [x[start_index:end_index] for x in x_train]    
-    
-    print("Done.\n")
-     
-
-    x_train = np.zeros((num_batches,batch_size,padding_len,2))
-    for batch in range(num_batches):
-        for question in batch:
-            for w in question:
-                for e in w: 
-            x_train[i][j] 
                   
     '''
-    #tokenized_sentences = np.array([[[[e1,e2] for e1,e2 in zip(w1,w2)] for w1,w2 in zip(q1,q2)] for q1,q2 in zip(tokenized_sentences[0],tokenized_sentences[1])])
-    #print(np.array(x_train).shape)
 
     # Shape is now (number question pairs,padding length,2)
     # We want to apply embedding to have tensor of shape 
     # (number question pairs,padding length,embedding dimensions,2)
 
-
+    x_train = [[[word_to_index[w] for w in q] for q in channel] for channel in tokenized_sentences]   
     y_train = np.asarray([[1,0] if j == '1' else [0,1] for j in is_duplicate[1:]])
 
     return x_train,y_train,word_to_index,index_to_word,E
@@ -300,15 +287,19 @@ def load_test_data(test_data,vocabulary_size,word_to_index,E):
 
     return X_test
 
-def create_batches(data,batch_size,num_epochs):
+def create_batches(data,batch_size,E):
     data_size = len(data)
     shuffled_indices = np.random.permutation(np.arange(data_size))
+    print("Shuffling data...")
     shuffled_data = [data[shuffled_indices[i]] for i in range(data_size)]
+    print("Done.\n")
     num_batches = int((np.floor(data_size/batch_size)))
-    for j in range(num_epochs):
-        for i in range(num_batches):
-            start_index = i * batch_size
-            end_index = start_index + batch_size
-            yield shuffled_data[start_index:end_index] 
+    for i in range(num_batches):
+        start_index = i * batch_size
+        end_index = start_index + batch_size
+        data_batch = shuffled_data[start_index:end_index]
+        data_batch[:-1] = embedded_batch(data_batch[:-1],E)
+        print(np.array(data_batch).shape)
+        yield data_batch 
 
 
