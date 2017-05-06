@@ -61,12 +61,14 @@ def embedded_batch(batch,E):
         batch[0][i] = [E[w] for w in q]
     for i,q in enumerate(batch[1]):
         batch[1][i] = [E[w] for w in q]
-    x_train = batch[0]
+    #print(np.array(batch).shape)
+    X_train = batch[0]
     for i,q in enumerate(batch[1]):
         for j,w in enumerate(q):
             for k,e in enumerate(w):
-                x_train[i][j][k] = [x_train[i][j][k],e]
-    yield x_train 
+                X_train[i][j][k] = [X_train[i][j][k],e]
+    #print(np.array(x_train).shape)
+    yield X_train 
 
 
 def cos_similarity(x,y):
@@ -287,19 +289,22 @@ def load_test_data(test_data,vocabulary_size,word_to_index,E):
 
     return X_test
 
-def create_batches(data,batch_size,E):
-    data_size = len(data)
+def create_batches(x_data,y_data,batch_size,E):
+    data_size = len(y_data)
     shuffled_indices = np.random.permutation(np.arange(data_size))
     print("Shuffling data...")
-    shuffled_data = [data[shuffled_indices[i]] for i in range(data_size)]
+    shuffled_x = [x_data[shuffled_indices[i]] for i in range(data_size)]
+    shuffled_y = [y_data[shuffled_indices[i]] for i in range(data_size)]
     print("Done.\n")
     num_batches = int((np.floor(data_size/batch_size)))
     for i in range(num_batches):
         start_index = i * batch_size
         end_index = start_index + batch_size
-        data_batch = shuffled_data[start_index:end_index]
-        data_batch[:-1] = embedded_batch(data_batch[:-1],E)
-        print(np.array(data_batch).shape)
-        yield data_batch 
+        X_batch = shuffled_x[start_index:end_index]
+        Y_batch = shuffled_y[start_index:end_index]
+        print('test')
+        X_batch = embedded_batch(X_batch,E)
+        print('test')
+        yield [X_batch,Y_batch]
 
 

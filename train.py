@@ -7,7 +7,6 @@ import numpy as np
 import os
 import time
 import datetime
-#import data_helpers
 import utils
 from CNN import CNN
 from tensorflow.contrib import learn
@@ -202,14 +201,13 @@ with tf.Graph().as_default():
 
         # Generate batches
         print('Batching...')
-        batches = utils.create_batches(list(zip(x_train[0],x_train[1],y_train)), FLAGS.batch_size,E)
+        batches  = utils.create_batches(list(zip(*x_train)),y_train,FLAGS.batch_size,E)
         print("Done.\n")
         # Training loop. For each batch...
 
         for j in range(FLAGS.num_epochs):
-            for batch in batches:
-                x_batch, y_batch = zip(*batch)
-                print('zipped')
+            for train_batch in batches:
+                x_batch, y_batch = train_batch[0],train_batch[1]
                 train_step(x_batch, y_batch)
                 print('train_stepped')
                 current_step = tf.train.global_step(sess, global_step)
