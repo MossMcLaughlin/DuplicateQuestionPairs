@@ -3,10 +3,11 @@
 
 CNN for NLP: bianary classification.
 
-   1. First model.
+   # Done. 1. First model.
+        First model done. Improvments:
    2. Vary hyperparameters.
    3. Recognize unknown words.
-   4. Learn embeddings?
+   4. Learn embeddings? - try word2vec
    
    
    
@@ -15,8 +16,8 @@ Notes: Remeber not to overfit.
        Keep in mind NOAA challenge and how to adapt the model.
           Due date: May 30th
 
- re doing loading data method - keep in mind memory and yield pieces! 
+ # Done. re doing loading data method - keep in mind memory and yield pieces! 
 
 
 
-   Requirments: Glove word embeddings. train and test csv files provided by Kaggle.
+   Requirments: Glove word embeddings. train and test csv files provided by Kaggle. tesorflow & numpy (matplotlib)
