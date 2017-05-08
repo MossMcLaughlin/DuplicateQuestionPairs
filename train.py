@@ -16,15 +16,13 @@ from tensorflow.contrib import learn
 
 # Data loading params
 tf.flags.DEFINE_float("dev_sample_percentage", .1, "Percentage of the training data to use for validation")
-#tf.flags.DEFINE_string("positive_data_file", "./data/rt-polaritydata/rt-polarity.pos", "Data source for the positive data.")
-#tf.flags.DEFINE_string("negative_data_file", "./data/rt-polaritydata/rt-polarity.neg", "Data source for the negative data.")
 tf.flags.DEFINE_string("train_data", "data/train.csv", "Data source for training data.")
 tf.flags.DEFINE_string("test_data", "data/test.csv", "Data source for the test data.")
 
 
 
 # Model Hyperparameters
-tf.flags.DEFINE_integer("embedding_dim", 50, "Dimensionality of character embedding")
+tf.flags.DEFINE_integer("embedding_dim", 300, "Dimensionality of character embedding")
 tf.flags.DEFINE_integer("vocabulary_size",12000,"Vocabulary size model will know")
 tf.flags.DEFINE_string("filter_sizes", "3,4,5", "Comma-separated filter sizes (default: '3,4,5')")
 tf.flags.DEFINE_integer("num_filters", 128, "Number of filters per filter size (default: 128)")
@@ -34,7 +32,7 @@ tf.flags.DEFINE_float("l2_reg_lambda", 0.0, "L2 regularization lambda (default: 
 # Training parameters
 tf.flags.DEFINE_integer("batch_size", 64, "Batch Size (default: 64)")
 tf.flags.DEFINE_integer("num_epochs", 100, "Number of training epochs (default: 200)")
-tf.flags.DEFINE_integer("evaluate_every", 100, "Evaluate model on dev set after this many steps (default: 100)")
+tf.flags.DEFINE_integer("evaluate_every", 250, "Evaluate model on dev set after this many steps (default: 100)")
 tf.flags.DEFINE_integer("checkpoint_every", 10000, "Save model after this many steps (default: 100)")
 tf.flags.DEFINE_integer("num_checkpoints", 5, "Number of checkpoints to store (default: 5)")
 # Misc Parameters
@@ -51,52 +49,18 @@ print("")
 
 # Data Preparation
 # ==================================================
-'''
-# Load data
-print("Loading data...")
-x_text, y = data_helpers.load_data_and_labels(FLAGS.positive_data_file, FLAGS.negative_data_file)
-
-# Build vocabulary
-max_document_length = max([len(x.split(" ")) for x in x_text])
-vocab_processor = learn.preprocessing.VocabularyProcessor(max_document_length)
-x = np.array(list(vocab_processor.fit_transform(x_text)))
-
-# Randomly shuffle data
-np.random.seed(10)
-shuffle_indices = np.random.permutation(np.arange(len(y)))
-x_shuffled = x[shuffle_indices]
-y_shuffled = y[shuffle_indices]
-
-# Split train/test set
-# TODO: This is very crude, should use cross-validation
-dev_sample_index = -1 * int(FLAGS.dev_sample_percentage * float(len(y)))
-x_train1, x_dev1 = x_shuffled[:dev_sample_index], x_shuffled[dev_sample_index:]
-y_train, y_dev = y_shuffled[:dev_sample_index], y_shuffled[dev_sample_index:]
-print("Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
-print("Train/Dev split: {:d}/{:d}".format(len(y_train), len(y_dev)))
-'''
 
 vocabulary_size = 12000
 
 x_train,y_train,word_to_index,index_to_word,E = utils.load_data(FLAGS.train_data,FLAGS.vocabulary_size)
 #x2,y2,word_to_index,E = utils.load_test_data(FLAGS.test_data,FLAGS.vocabulary_size)
 
-#print("Shuffling Data...")
-#np.random.seed(42)
-#shuffle_indices = np.random.permutation(np.arange(len(y_train)))
 print(len(y_train),len(x_train),len(x_train[1]))
-x_dev= (x_train[:100])
-y_dev= (y_train[:100])
-#print("test")
-#x_train = ([x_train[shuffle_indices[i]] for i in range(len(shuffle_indices))])
-#y_train = ([y_train[shuffle_indices[i]] for i in range(len(y_train))])
-#print("Done.\n")
+#x_dev= (x_train[:100])
+#y_dev= (y_train[:100])
+x_dev,y_dev = utils.create_dev(x_train[:1000],y_train[:1000],E)
 
-#np.random.seed(42)
-#shuffle_indices2 = np.random.permutation(np.arange(len(y2)))
-#x_dev = x2[shuffle_indices2]
-#y_dev = y2[shuffle_indices2]
-
+data_shape = (FLAGS.batch_size,60,FLAGS.embedding_dim,2)
 
 # Training
 # ==================================================
@@ -109,7 +73,7 @@ with tf.Graph().as_default():
     with sess.as_default():
         print("Building model...")
         cnn = CNN(
-            sequence_length=len(x_train[1]),
+            sequence_length=len(x_train[0][1]),
             num_classes=len(y_train[1]),
             vocab_size=FLAGS.vocabulary_size,
             embedding_size=FLAGS.embedding_dim,
@@ -164,7 +128,6 @@ with tf.Graph().as_default():
         sess.run(tf.global_variables_initializer())
 
         def train_step(x_batch, y_batch):
-            print('starting train step')
             """
             A single training step
             """
@@ -177,7 +140,7 @@ with tf.Graph().as_default():
                 [train_op, global_step, train_summary_op, cnn.loss, cnn.accuracy],
                 feed_dict)
             time_str = datetime.datetime.now().isoformat()
-            print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
+            #print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
             train_summary_writer.add_summary(summaries, step)
 
         def dev_step(x_batch, y_batch, writer=None):
@@ -201,21 +164,19 @@ with tf.Graph().as_default():
 
         # Generate batches
         print('Batching...')
-        batches  = utils.create_batches(list(zip(*x_train)),y_train,FLAGS.batch_size,E)
+        batches  = utils.create_batches(x_train,y_train,FLAGS.num_epochs,FLAGS.batch_size,data_shape,E)
         print("Done.\n")
         # Training loop. For each batch...
 
-        for j in range(FLAGS.num_epochs):
-            for train_batch in batches:
-                x_batch, y_batch = train_batch[0],train_batch[1]
-                train_step(x_batch, y_batch)
-                print('train_stepped')
-                current_step = tf.train.global_step(sess, global_step)
-                print('current_stepped')
-                if current_step % FLAGS.evaluate_every == 0:
-                    print("\nEvaluation:")
-                    dev_step(x_dev, y_dev, writer=None)
-                    print("")
-                if current_step % FLAGS.checkpoint_every == 0:
-                    path = saver.save(sess, checkpoint_prefix, global_step=current_step)
-                    print("Saved model checkpoint to {}\n".format(path))
+        for train_batch in batches:
+            x_batch, y_batch = [a for a,b in train_batch],[b for a,b in train_batch]
+#                x_batch, y_batch = zip(*batches)
+            #print(np.array(x_batch).shape,np.array(y_batch).shape)
+            train_step(x_batch, y_batch)
+            current_step = tf.train.global_step(sess, global_step)
+            if current_step % FLAGS.evaluate_every == 0:
+                print("\nEvaluation:")
+                dev_step(x_dev, y_dev, writer=None)
+            if current_step % FLAGS.checkpoint_every == 0:
+                path = saver.save(sess, checkpoint_prefix, global_step=current_step)
+                print("Saved model checkpoint to {}\n".format(path))

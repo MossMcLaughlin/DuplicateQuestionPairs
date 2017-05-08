@@ -26,7 +26,7 @@ similarity_threshold = 0.95
 replace_similar_words = False
 padding_len = 60
 
-embedding_dim = 50
+embedding_dim = 300
 embedding_file = 'glove.6B/glove.6B.%sd.txt' % embedding_dim
 #train_file = 'data/train.csv'
 #test_file = 'data/test.csv'
@@ -55,20 +55,18 @@ def create_embedding(embedding_dict,vocab_size,itw):
     for i in range(vocab_size): E[i+3] = embedding_dict[itw[i+3]]
     return E
         
-def embedded_batch(batch,E):
+def embedded_batch(batch,data_shape,E):
     batch = [list(tup) for tup in batch]
-    for i,q in enumerate(batch[0]):
-        batch[0][i] = [E[w] for w in q]
-    for i,q in enumerate(batch[1]):
-        batch[1][i] = [E[w] for w in q]
-    #print(np.array(batch).shape)
-    X_train = batch[0]
-    for i,q in enumerate(batch[1]):
-        for j,w in enumerate(q):
+    embedded_batch = [[[E[word] for word in question] for question in line] for line in batch]
+    X_train = np.zeros(data_shape)
+    for i,line in enumerate(embedded_batch):
+        for j,w in enumerate(line[0]):
             for k,e in enumerate(w):
-                X_train[i][j][k] = [X_train[i][j][k],e]
-    #print(np.array(x_train).shape)
-    yield X_train 
+                X_train[i][j][k][0] = e
+        for j,w in enumerate(line[1]):
+            for k,e in enumerate(w):
+                X_train[i][j][k][1] = e
+    return X_train 
 
 
 def cos_similarity(x,y):
@@ -154,11 +152,6 @@ def load_data(filename,vocabulary_size=12000):
             for line in tokenized_sentences:
                 for x in line:
                     if x in similar_words: x = similar_words[x] 
-                    
-    
-    # Save vocab in a file with one words in each line, from most to least frequent 
-    #         (if same vocab is to be used for training and later evaluation)
-
     '''
 
     # Replace unknown words with unkown token (FOR NOW) 
@@ -201,8 +194,8 @@ def load_data(filename,vocabulary_size=12000):
     # This showed us that longest question that is similar to another question is 57 words long.
     # We can pad to 60 without loosing any duplicate examples.
 
-    # Pad Data, assume all examples over the padding limit are NOT the same question.
-    # Note this means we will make this assumption on the test data.
+    # Pad Data, assume all examples over the padding limit are NOT the same question for the TEST data.
+    # On the train data we throw out all examples over the padding limit.
 
     print("Padding to questions to length %d..." % padding_len) 
     removed_q = []
@@ -213,7 +206,7 @@ def load_data(filename,vocabulary_size=12000):
                 tokenized_sentences[1][i] = 'remove'
                 removed_q.append(i)
 
-    # We have to remove the same rows from is_duplicate
+    # We need to make sure to remove the same rows from is_duplicate.
     is_duplicate = [d for i,d in enumerate(is_duplicate) if i not in removed_q] 
 
 
@@ -226,38 +219,11 @@ def load_data(filename,vocabulary_size=12000):
     print("Done.\n")
     avg_len = np.mean([len(q) for q in tokenized_sentences[0]])
 
-    # Build training data
     print(np.array(tokenized_sentences).shape)
-
-    # Our input data is currently shape (2,num of question pairs,padding length).
-    # We want to arrange this to be (num of question pairs,padding length,embedding dimension,2)
-
-    '''
-    for i,q in enumerate(tokenized_sentences[0]):
-        tokenized_sentences[0][i] = [E[word_to_index[w]] for w in q]
-
-    for i,q in enumerate(tokenized_sentences[1]):
-        tokenized_sentences[1][i] = [E[word_to_index[w]] for w in q]
-    
-    #tokenized_sentences = np.asarray([[[E[word_to_index[w]] for w in question] for question in channel] for channel in tokenized_sentences])
-    print(np.array(tokenized_sentences).shape)
-    x_train = tokenized_sentences[0]
-    
-    print("Reshaping data...")
-    for i,q in enumerate(tokenized_sentences[1]):
-        for j,w in enumerate(q):
-            for k,e in enumerate(w):
-                x_train[i][j][k] = [x_train[i][j][k],e]
-                  
-    '''
-
-    # Shape is now (number question pairs,padding length,2)
-    # We want to apply embedding to have tensor of shape 
-    # (number question pairs,padding length,embedding dimensions,2)
 
     x_train = [[[word_to_index[w] for w in q] for q in channel] for channel in tokenized_sentences]   
     y_train = np.asarray([[1,0] if j == '1' else [0,1] for j in is_duplicate[1:]])
-
+    x_train = list(zip(*x_train))
     return x_train,y_train,word_to_index,index_to_word,E
 
 
@@ -281,30 +247,52 @@ def load_test_data(test_data,vocabulary_size,word_to_index,E):
     
     tokenized_sentences = [[[w if w in word_to_index else UNKNOWN_TOKEN for w in question] for question in channel] for channel in tokenized_sentences]
 
-    #X_test = np.asarray([[[word_to_index[w] for w in question] for question in channel] for channel in tokenized_sentences])
-
     X_data = np.asarray([[[E[word_to_index[w]] for w in question] for question in channel] for channel in tokenized_sentences])
 
     X_test = np.array([[[np.array([e1,e2]) for e1,e2 in zip(w1,w2)] for w1,w2 in zip(q1,q2)] for q1,q2 in zip(X_data[0],X_data[1])])
 
     return X_test
 
-def create_batches(x_data,y_data,batch_size,E):
+def create_batches(x_data,y_data,num_epochs,batch_size,data_shape,E):
     data_size = len(y_data)
+    print("Data Size: ", data_size)
     shuffled_indices = np.random.permutation(np.arange(data_size))
     print("Shuffling data...")
     shuffled_x = [x_data[shuffled_indices[i]] for i in range(data_size)]
     shuffled_y = [y_data[shuffled_indices[i]] for i in range(data_size)]
     print("Done.\n")
     num_batches = int((np.floor(data_size/batch_size)))
-    for i in range(num_batches):
-        start_index = i * batch_size
-        end_index = start_index + batch_size
-        X_batch = shuffled_x[start_index:end_index]
-        Y_batch = shuffled_y[start_index:end_index]
-        print('test')
-        X_batch = embedded_batch(X_batch,E)
-        print('test')
-        yield [X_batch,Y_batch]
+    print("batch size: ",batch_size)
+    print('Number of batches',num_batches)
+    for j in range(num_epochs):
+        print("\n-------------------------")
+        print("Starting Epoch %d / %d...\n-------------------------" % (j,num_epochs)) 
+        for i in range(num_batches):
+            #print("batching batch number ",i)
+            start_index = i * batch_size
+            end_index = start_index + batch_size
+            X_batch = shuffled_x[start_index:end_index]
+            Y_batch = np.array(shuffled_y[start_index:end_index])
+            X_batch = np.array(embedded_batch(X_batch,data_shape,E))
+            zip_batches = list(zip(X_batch,Y_batch))
+            yield zip_batches
 
+def create_dev(x_data,y_data,E):
+    data_size = len(y_data)
+    print("Dev Data Size: ", data_size)
+    shuffled_indices = np.random.permutation(np.arange(data_size))
+    shuffled_x = [x_data[shuffled_indices[i]] for i in range(data_size)]
+    shuffled_y = [y_data[shuffled_indices[i]] for i in range(data_size)]
+    shuffled_x = [[[E[w] for w in question] for question in line] for line in shuffled_x] 
+    X_dev = np.zeros((len(x_data),60,300,2))
+    for i,line in enumerate(shuffled_x):
+        for j,w in enumerate(line[0]):
+            for k,e in enumerate(w):
+                X_dev[i][j][k][0] = e
+        for j,w in enumerate(line[1]):
+            for k,e in enumerate(w):
+                X_dev[i][j][k][1] = e    
+    Y_dev = shuffled_y
+    print("dev shape", np.array(X_dev).shape)
+    return X_dev,Y_dev
 
