@@ -3,7 +3,7 @@
 
 CNN for NLP: bianary classification.
 
-   # Done. 1. First model.
+   //Done. 1. First model.
         First model done. Improvments:
    2. Vary hyperparameters.
    3. Recognize unknown words.
@@ -16,7 +16,7 @@ Notes: Remeber not to overfit.
        Keep in mind NOAA challenge and how to adapt the model.
           Due date: May 30th
 
- # Done. re doing loading data method - keep in mind memory and yield pieces! 
+ //Done. re doing loading data method - keep in mind memory and yield pieces! 
 
 
 
