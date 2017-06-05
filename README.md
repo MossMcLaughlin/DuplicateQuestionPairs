@@ -1,6 +1,6 @@
-    Using a convolutional neural network to identify if a pair of questions are a duplicate query. This is a NLP, bianary classification problem.
+Using a convolutional neural network to identify if a pair of questions are a duplicate query. This is a NLP, bianary classification problem.
 
-    This code was written as a submission for a kagle competition hosted by Quora who provided the dataset.
+This code was written as a submission for a kagle competition hosted by Quora who provided the dataset.
 
     
 
