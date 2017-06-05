@@ -1,8 +1,10 @@
+    Using a convolutional neural network to identify if a pair of questions are a duplicate query. This is a NLP, bianary classification problem.
 
-   Submission for kagle competition.
+    This code was written as a submission for a kagle competition hosted by Quora who provided the dataset.
 
-CNN for NLP: bianary classification.
+    
 
 
 
-   Requirments: Glove word embeddings. train and test csv files provided by Kaggle. tesorflow & numpy (matplotlib)
+   Requirments: Glove word embeddings, tesorflow, numpy.
+   Train and test csv files provided by Quora through Kaggle.
