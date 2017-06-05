@@ -53,11 +53,8 @@ print("")
 vocabulary_size = 12000
 
 x_train,y_train,word_to_index,index_to_word,E = utils.load_data(FLAGS.train_data,FLAGS.vocabulary_size)
-#x2,y2,word_to_index,E = utils.load_test_data(FLAGS.test_data,FLAGS.vocabulary_size)
 
 print(len(y_train),len(x_train),len(x_train[1]))
-#x_dev= (x_train[:100])
-#y_dev= (y_train[:100])
 x_dev,y_dev = utils.create_dev(x_train[:1000],y_train[:1000],E)
 
 data_shape = (FLAGS.batch_size,60,FLAGS.embedding_dim,2)
@@ -170,7 +167,6 @@ with tf.Graph().as_default():
 
         for train_batch in batches:
             x_batch, y_batch = [a for a,b in train_batch],[b for a,b in train_batch]
-#                x_batch, y_batch = zip(*batches)
             #print(np.array(x_batch).shape,np.array(y_batch).shape)
             train_step(x_batch, y_batch)
             current_step = tf.train.global_step(sess, global_step)
