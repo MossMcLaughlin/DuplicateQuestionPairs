@@ -73,14 +73,12 @@ with graph.as_default():
 
         # Get the placeholders from the graph by name
         input_x = graph.get_operation_by_name("input_x").outputs[0]
-        # input_y = graph.get_operation_by_name("input_y").outputs[0]
         dropout_keep_prob = graph.get_operation_by_name("dropout_keep_prob").outputs[0]
 
         # Tensors we want to evaluate
         predictions = graph.get_operation_by_name("output/predictions").outputs[0]
 
         # Generate batches for one epoch
-        #batches = data_helpers.batch_iter(list(x_test), FLAGS.batch_size, 1, shuffle=False)
         batches  = utils.create_test_batches(x_test,FLAGS.batch_size,data_shape,E)
         # Collect the predictions here
         all_predictions = []
@@ -101,7 +99,6 @@ print(len(x_test),len(np.column_stack(x_test)),len(all_predictions))
 out_path = os.path.join(FLAGS.checkpoint_dir, "..", "prediction.csv")
 print("Saving evaluation to {0}".format(out_path))
 with open(out_path, 'w') as f:
-#    csv.writer(f).writerows(predictions_human_readable)
     csv.writer(f).writerows(([p] for p in all_predictions))
  
 
