@@ -28,8 +28,6 @@ padding_len = 60
 
 embedding_dim = 300
 embedding_file = 'glove.6B/glove.6B.%sd.txt' % embedding_dim
-#train_file = 'data/train.csv'
-#test_file = 'data/test.csv'
 
 
 
